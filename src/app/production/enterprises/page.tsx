@@ -1,0 +1,352 @@
+"use client";
+
+import React, { useState, useMemo } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Search, Plus, Upload, Eye, Pencil, Trash2 } from "lucide-react";
+import { productionEnterprises as initialData } from "@/lib/mock-data";
+import { FormModal, type FormField, DetailModal, type DetailField, DeleteDialog } from "@/components/crud";
+import type { UploadedFile } from "@/components/crud/file-upload";
+import { toast } from "sonner";
+
+interface Enterprise {
+  id: string;
+  name: string;
+  creditCode: string;
+  legalPerson: string;
+  phone: string;
+  region: string;
+  address: string;
+  type: string;
+  licenseNo: string;
+  licenseExpiry: string;
+  creditGrade: string;
+  status: string;
+  attachment?: UploadedFile[];
+  licenseFile?: UploadedFile[];
+}
+
+const statusConfig: Record<string, { dot: string; badge: string }> = {
+  "正常": { dot: "bg-green-500", badge: "bg-green-100 text-green-700" },
+  "临期": { dot: "bg-amber-500", badge: "bg-amber-100 text-amber-700" },
+  "过期": { dot: "bg-red-500", badge: "bg-red-100 text-red-700" },
+  "整改中": { dot: "bg-orange-500", badge: "bg-orange-100 text-orange-700" },
+  "已停产": { dot: "bg-gray-500", badge: "bg-gray-100 text-gray-700" },
+  "已注销": { dot: "bg-gray-400", badge: "bg-gray-100 text-gray-500" },
+};
+
+const formFields: FormField[] = [
+  { name: "name", label: "企业名称", type: "text", required: true, colSpan: 2, placeholder: "请输入企业全称" },
+  { name: "creditCode", label: "统一社会信用代码", type: "text", required: true, placeholder: "18位统一社会信用代码" },
+  { name: "legalPerson", label: "法定代表人", type: "text", required: true, placeholder: "法人姓名" },
+  { name: "phone", label: "联系电话", type: "text", required: true, placeholder: "固定电话或手机号" },
+  { name: "region", label: "所在地区", type: "select", required: true, options: [
+    { label: "蚌埠市", value: "蚌埠市" }, { label: "阜阳市", value: "阜阳市" },
+    { label: "宿州市", value: "宿州市" }, { label: "滁州市", value: "滁州市" },
+    { label: "合肥市", value: "合肥市" },
+  ]},
+  { name: "address", label: "详细地址", type: "text", required: true, colSpan: 2, placeholder: "详细生产经营地址" },
+  { name: "type", label: "生产类型", type: "select", required: true, options: [
+    { label: "原药+制剂", value: "原药+制剂" }, { label: "制剂", value: "制剂" }, { label: "原药", value: "原药" },
+  ]},
+  { name: "licenseNo", label: "生产许可证号", type: "text", required: true, placeholder: "WP-XXXXXXXX" },
+  { name: "licenseExpiry", label: "许可证有效期至", type: "date", required: true },
+  { name: "creditGrade", label: "诚信等级", type: "select", options: [
+    { label: "A级", value: "A" }, { label: "B级", value: "B" }, { label: "C级", value: "C" }, { label: "D级", value: "D" },
+  ]},
+  { name: "status", label: "状态", type: "select", options: [
+    { label: "正常", value: "正常" }, { label: "整改中", value: "整改中" }, { label: "已停产", value: "已停产" }, { label: "临期", value: "临期" }, { label: "过期", value: "过期" },
+  ]},
+  { name: "licenseFile", label: "营业执照", type: "image", accept: "image/*,.pdf", maxFiles: 3, colSpan: 2 },
+  { name: "attachment", label: "附件材料", type: "file", accept: "image/*,.pdf,.doc,.docx", maxFiles: 5, colSpan: 2 },
+];
+
+const detailFields: DetailField[] = [
+  { name: "name", label: "企业名称", colSpan: 2 },
+  { name: "creditCode", label: "统一社会信用代码" },
+  { name: "legalPerson", label: "法定代表人" },
+  { name: "phone", label: "联系电话" },
+  { name: "region", label: "所在地区" },
+  { name: "address", label: "详细地址", colSpan: 2 },
+  { name: "type", label: "生产类型" },
+  { name: "licenseNo", label: "生产许可证号" },
+  { name: "licenseExpiry", label: "许可证有效期至" },
+  { name: "creditGrade", label: "诚信等级" },
+  { name: "status", label: "状态", type: "badge" },
+  { name: "licenseFile", label: "营业执照", type: "image", colSpan: 2 },
+  { name: "attachment", label: "附件材料", type: "file", colSpan: 2 },
+];
+
+export default function ProductionEnterprisesPage() {
+  const [data, setData] = useState<Enterprise[]>(
+    (initialData as unknown as Enterprise[]).map((e) => ({ ...e, attachment: [], licenseFile: [] }))
+  );
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("全部");
+  const [typeFilter, setTypeFilter] = useState("all");
+
+  // CRUD modal states
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"add" | "edit">("add");
+  const [formValues, setFormValues] = useState<Record<string, unknown>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailData, setDetailData] = useState<Record<string, unknown> | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteName, setDeleteName] = useState("");
+
+  // Computed status counts
+  const statusCounts = useMemo(() => ({
+    "全部": data.length,
+    "正常": data.filter((e) => e.status === "正常").length,
+    "整改中": data.filter((e) => e.status === "整改中").length,
+    "已停产": data.filter((e) => e.status === "已停产").length,
+    "许可证过期": data.filter((e) => e.status === "过期").length,
+  }), [data]);
+
+  const filtered = useMemo(() =>
+    data.filter((e) => {
+      if (statusFilter === "许可证过期" && e.status !== "过期") return false;
+      if (statusFilter !== "全部" && statusFilter !== "许可证过期" && e.status !== statusFilter) return false;
+      if (typeFilter !== "all" && e.type !== typeFilter) return false;
+      if (search && !e.name.includes(search) && !e.licenseNo.includes(search)) return false;
+      return true;
+    }),
+    [data, statusFilter, typeFilter, search]
+  );
+
+  // Handlers
+  const openAdd = () => {
+    setFormMode("add");
+    setFormValues({ status: "正常", creditGrade: "A", type: "制剂", attachment: [], licenseFile: [] });
+    setEditingId(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (item: Enterprise) => {
+    setFormMode("edit");
+    setFormValues({
+      ...item,
+      attachment: item.attachment || [],
+      licenseFile: item.licenseFile || [],
+    });
+    setEditingId(item.id);
+    setFormOpen(true);
+  };
+
+  const openDetail = (item: Enterprise) => {
+    setDetailData({ ...item });
+    setDetailOpen(true);
+  };
+
+  const openDelete = (item: Enterprise) => {
+    setDeleteId(item.id);
+    setDeleteName(item.name);
+    setDeleteOpen(true);
+  };
+
+  const handleFormChange = (name: string, value: unknown) => {
+    setFormValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFormSubmit = () => {
+    if (!formValues.name) {
+      toast.error("请填写企业名称");
+      return;
+    }
+    if (formMode === "add") {
+      const newItem: Enterprise = {
+        id: `pe-${Date.now()}`,
+        name: String(formValues.name || ""),
+        creditCode: String(formValues.creditCode || ""),
+        legalPerson: String(formValues.legalPerson || ""),
+        phone: String(formValues.phone || ""),
+        region: String(formValues.region || ""),
+        address: String(formValues.address || ""),
+        type: String(formValues.type || "制剂"),
+        licenseNo: String(formValues.licenseNo || ""),
+        licenseExpiry: String(formValues.licenseExpiry || ""),
+        creditGrade: String(formValues.creditGrade || "A"),
+        status: String(formValues.status || "正常"),
+        attachment: (formValues.attachment as UploadedFile[]) || [],
+        licenseFile: (formValues.licenseFile as UploadedFile[]) || [],
+      };
+      setData((prev) => [newItem, ...prev]);
+      toast.success("新增成功", { description: `企业「${newItem.name}」已添加` });
+    } else {
+      setData((prev) =>
+        prev.map((item) =>
+          item.id === editingId
+            ? {
+                ...item,
+                ...formValues,
+                attachment: (formValues.attachment as UploadedFile[]) || item.attachment || [],
+                licenseFile: (formValues.licenseFile as UploadedFile[]) || item.licenseFile || [],
+              }
+            : item
+        )
+      );
+      toast.success("编辑成功", { description: `企业「${formValues.name}」已更新` });
+    }
+    setFormOpen(false);
+  };
+
+  const handleDelete = () => {
+    setData((prev) => prev.filter((item) => item.id !== deleteId));
+    toast.success("删除成功", { description: `企业「${deleteName}」已删除` });
+    setDeleteOpen(false);
+  };
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">生产企业管理</h1>
+        <div className="flex gap-2">
+          <Button onClick={openAdd}>
+            <Plus className="mr-1 h-4 w-4" />新增企业
+          </Button>
+          <Button variant="outline">
+            <Upload className="mr-1 h-4 w-4" />批量导入
+          </Button>
+        </div>
+      </div>
+
+      <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+        <TabsList>
+          {Object.entries(statusCounts).map(([key, count]) => (
+            <TabsTrigger key={key} value={key}>
+              {key}({count})
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      <div className="flex flex-wrap gap-3">
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="生产类型" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部类型</SelectItem>
+            <SelectItem value="原药+制剂">原药+制剂</SelectItem>
+            <SelectItem value="制剂">制剂</SelectItem>
+            <SelectItem value="原药">原药</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索企业名称/许可证号..."
+            className="w-[240px] pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[260px]">企业名称</TableHead>
+                <TableHead>生产类型</TableHead>
+                <TableHead>许可证号</TableHead>
+                <TableHead>有效期至</TableHead>
+                <TableHead>诚信等级</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead className="text-center w-[200px]">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((e) => {
+                const sc = statusConfig[e.status] || statusConfig["正常"];
+                return (
+                  <TableRow key={e.id}>
+                    <TableCell className="font-medium">{e.name}</TableCell>
+                    <TableCell>{e.type}</TableCell>
+                    <TableCell className="font-mono text-sm">{e.licenseNo}</TableCell>
+                    <TableCell>{e.licenseExpiry}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{e.creditGrade}级</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={sc.badge}>
+                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${sc.dot} mr-1`} />
+                        {e.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openDetail(e)}>
+                          <Eye className="mr-0.5 h-3.5 w-3.5" />查看
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(e)}>
+                          <Pencil className="mr-0.5 h-3.5 w-3.5" />编辑
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => openDelete(e)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    暂无数据
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
+            <span>共 {filtered.length} 家企业</span>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" disabled>&lt;</Button>
+              <Button variant="outline" size="sm" className="bg-primary text-white">1</Button>
+              <Button variant="outline" size="sm" disabled>&gt;</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Form Modal (Add/Edit) */}
+      <FormModal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title={formMode === "add" ? "新增生产企业" : "编辑生产企业"}
+        fields={formFields}
+        values={formValues}
+        onChange={handleFormChange}
+        onSubmit={handleFormSubmit}
+      />
+
+      {/* Detail Modal */}
+      <DetailModal
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        title="企业详情"
+        fields={detailFields}
+        data={detailData}
+      />
+
+      {/* Delete Dialog */}
+      <DeleteDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        description={`确定要删除企业「${deleteName}」吗？删除后将无法恢复。`}
+      />
+    </div>
+  );
+}
