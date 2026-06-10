@@ -142,7 +142,7 @@ export function DetailModal({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        className="sm:max-w-2xl max-h-[88vh] flex flex-col !p-0 !gap-0 overflow-hidden"
+        className="sm:max-w-2xl max-h-[88vh] flex flex-col !p-0 !gap-0"
         showCloseButton
       >
         <DialogHeader className="px-6 pt-5 pb-3 shrink-0 border-b">
@@ -166,7 +166,7 @@ export function DetailModal({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="px-6 py-3 border-t shrink-0 bg-muted/30">
+        <DialogFooter className="px-6 py-3 border-t shrink-0 bg-muted/30 sticky bottom-0">
           <Button variant="outline" onClick={onClose}>
             关闭
           </Button>

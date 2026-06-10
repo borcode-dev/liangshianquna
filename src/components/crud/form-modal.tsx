@@ -135,7 +135,7 @@ export function FormModal({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        className="sm:max-w-2xl max-h-[88vh] flex flex-col !p-0 !gap-0 overflow-hidden"
+        className="sm:max-w-2xl max-h-[88vh] flex flex-col !p-0 !gap-0"
         showCloseButton
       >
         <DialogHeader className="px-6 pt-5 pb-3 shrink-0 border-b">
@@ -143,7 +143,7 @@ export function FormModal({
           <DialogDescription className="sr-only">填写表单信息</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <ScrollArea className="flex-1 px-6 py-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4 pb-2">
               {fields.map((field) => (
@@ -163,7 +163,7 @@ export function FormModal({
             </div>
           </ScrollArea>
 
-          <DialogFooter className="px-6 py-3 border-t shrink-0 bg-muted/30">
+          <DialogFooter className="px-6 py-3 border-t shrink-0 bg-muted/30 sticky bottom-0">
             <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
