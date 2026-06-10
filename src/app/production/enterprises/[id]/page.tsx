@@ -17,6 +17,10 @@ import { productionEnterprises, productionProducts, productionLedger, pesticideR
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
+export function generateStaticParams() {
+  return productionEnterprises.map((e) => ({ id: e.id }));
+}
+
 export default function ProductionEnterpriseDetailPage() {
   const params = useParams();
   const enterprise = productionEnterprises.find((e) => e.id === params.id) || productionEnterprises[0];

@@ -17,6 +17,10 @@ import { businessEnterprises, inboundRecords, outboundRecords, inventoryData, al
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
+export function generateStaticParams() {
+  return businessEnterprises.map((e) => ({ id: e.id }));
+}
+
 export default function BusinessEnterpriseDetailPage() {
   const params = useParams();
   const enterprise = businessEnterprises.find((e) => e.id === params.id) || businessEnterprises[0];
