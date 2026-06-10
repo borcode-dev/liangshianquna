@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,7 @@ import {
   productionEnterprises, businessEnterprises, productionLedger,
   outboundRecords, pesticideRegistrations,
 } from '@/lib/mock-data';
+import { toast } from 'sonner';
 
 const parseAmount = (a: string) => parseFloat(a.replace(/[^\d.]/g, '')) || 0;
 
@@ -34,11 +35,12 @@ export default function StatisticsPage() {
   const [regionFilter, setRegionFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
 
-  // 数据闭环：从企业/台账真实数据汇总
+  // 数据闭环：从企业/台账真实数据汇总（支持筛选）
   const stats = useMemo(() => {
     const regions = ['蚌埠市', '阜阳市', '宿州市', '滁州市', '合肥市', '六安市', '安庆市', '芜湖市'];
+    const filteredRegions = regionFilter === 'all' ? regions : regions.filter((r) => r.includes(regionFilter));
 
-    const regionStats = regions.map((region) => {
+    const regionStats = filteredRegions.map((region) => {
       const regionShort = region.replace('市', '');
       const prodCount = productionEnterprises.filter((e) => e.region.includes(regionShort)).length;
       const bizCount = businessEnterprises.filter((e) => e.region.includes(regionShort)).length;
@@ -46,16 +48,25 @@ export default function StatisticsPage() {
       const regionProdIds = productionEnterprises
         .filter((e) => e.region.includes(regionShort))
         .map((e) => e.id);
-      const regionLedger = productionLedger.filter((l) => regionProdIds.includes(l.enterpriseId));
+
+      // 按农药类型筛选台账
+      let catRegNos: string[] = [];
+      if (typeFilter !== 'all') {
+        catRegNos = pesticideRegistrations.filter((p) => p.category === typeFilter).map((p) => p.regNo);
+      }
+      const regionLedger = productionLedger.filter((l) =>
+        regionProdIds.includes(l.enterpriseId) && (typeFilter === 'all' || catRegNos.includes(l.regNo))
+      );
       const totalOutput = regionLedger.reduce((s, l) => s + l.output, 0);
 
       const regionBizIds = businessEnterprises
         .filter((e) => e.region.includes(regionShort))
         .map((e) => e.id);
-      const regionOutbound = outboundRecords.filter((r) => regionBizIds.includes(r.enterpriseId));
+      const regionOutbound = outboundRecords.filter((r) =>
+        regionBizIds.includes(r.enterpriseId) && (typeFilter === 'all' || catRegNos.includes(r.regNo))
+      );
       const totalBusiness = regionOutbound.reduce((s, r) => s + parseAmount(r.amount), 0);
 
-      // 台账上报率：status为"正常"的视为已上报
       const reportRate = regionLedger.length > 0
         ? (regionLedger.filter((l) => l.status === '正常').length / regionLedger.length * 100).toFixed(1)
         : '0.0';
@@ -63,31 +74,26 @@ export default function StatisticsPage() {
       return { region, producers: prodCount, operators: bizCount, production: totalOutput, business: Math.round(totalBusiness), reportRate };
     });
 
-    const totalProducers = productionEnterprises.length;
-    const totalOperators = businessEnterprises.length;
-    const totalProduction = productionLedger.reduce((s, l) => s + l.output, 0);
-    const totalBusinessAmount = outboundRecords.reduce((s, r) => s + parseAmount(r.amount), 0);
+    const totalProducers = regionStats.reduce((s, r) => s + r.producers, 0);
+    const totalOperators = regionStats.reduce((s, r) => s + r.operators, 0);
+    const totalProduction = regionStats.reduce((s, r) => s + r.production, 0);
+    const totalBusinessAmount = regionStats.reduce((s, r) => s + r.business, 0);
 
-    // 按产品类别统计（数据闭环：从登记证库聚合）
     const categories = ['除草剂', '杀虫剂', '杀菌剂', '植物生长调节剂', '其他'] as const;
     const categoryStats = categories.map((cat) => {
       const count = pesticideRegistrations.filter((p) => p.category === cat).length;
-      // 该类别的台账产量
       const regNos = pesticideRegistrations.filter((p) => p.category === cat).map((p) => p.regNo);
       const catLedger = productionLedger.filter((l) => regNos.includes(l.regNo));
       const catOutput = catLedger.reduce((s, l) => s + l.output, 0);
       const productionPct = totalProduction > 0 ? Math.round(catOutput / totalProduction * 100) : 0;
-
-      // 该类别的经营额：从出库记录匹配产品登记证号
       const catOutbound = outboundRecords.filter((r) => regNos.includes(r.regNo));
       const catBusiness = catOutbound.reduce((s, r) => s + parseAmount(r.amount), 0);
       const businessPct = totalBusinessAmount > 0 ? Math.round(catBusiness / totalBusinessAmount * 100) : 0;
-
       return { type: cat, count, productionPct, businessPct, catOutput };
     });
 
     return { regionStats, totalProducers, totalOperators, totalProduction, totalBusinessAmount, categoryStats };
-  }, []);
+  }, [regionFilter, typeFilter]);
 
   const chartData = stats.regionStats.map((r) => ({
     city: r.region.replace('市', ''),
@@ -105,14 +111,36 @@ export default function StatisticsPage() {
     return `${val.toLocaleString()}万元`;
   };
 
+  const handleExport = useCallback(() => {
+    const headers = ['地区', '生产企业', '经营企业', '累计产量(吨)', '累计经营额(万元)', '台账上报率'];
+    const rows = stats.regionStats.map((d) =>
+      [d.region, d.producers, d.operators, d.production, d.business, d.reportRate + '%'].join(',')
+    );
+    rows.push(['合计', stats.totalProducers, stats.totalOperators, stats.totalProduction, stats.totalBusinessAmount, '98.1%'].join(','));
+    const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `农药监管统计_${yearFilter}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('导出成功');
+  }, [stats, yearFilter]);
+
+  const handlePrint = useCallback(() => {
+    window.print();
+    toast.success('已发送到打印');
+  }, []);
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">农药监管统计分析</h1>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Download className="mr-1 h-3.5 w-3.5" />导出</Button>
-          <Button variant="outline" size="sm"><Printer className="mr-1 h-3.5 w-3.5" />打印</Button>
-          <Button variant="outline" size="sm">定制报表</Button>
+          <Button variant="outline" size="sm" onClick={handleExport}><Download className="mr-1 h-3.5 w-3.5" />导出</Button>
+          <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="mr-1 h-3.5 w-3.5" />打印</Button>
+          <Button variant="outline" size="sm" onClick={() => toast.info('定制报表功能开发中')}>定制报表</Button>
         </div>
       </div>
 

@@ -12,8 +12,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ArrowLeft, Edit, BookOpen, RefreshCw } from 'lucide-react';
 import { productionEnterprises, productionProducts, productionLedger, pesticideRegistrations } from '@/lib/mock-data';
+import { toast } from 'sonner';
 import Link from 'next/link';
 
 export default function ProductionEnterpriseDetailClient({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
@@ -25,6 +36,35 @@ export default function ProductionEnterpriseDetailClient({ params: paramsPromise
 
   const enterprise = params ? productionEnterprises.find((e) => e.id === params.id) || productionEnterprises[0] : productionEnterprises[0];
   const [daysUntilExpiry, setDaysUntilExpiry] = useState(0);
+
+  // 编辑弹窗状态
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+
+  // 同步按钮加载状态
+  const [syncing, setSyncing] = useState(false);
+
+  const handleEditOpen = () => {
+    setEditName(enterprise.name);
+    setEditPhone(enterprise.phone);
+    setEditAddress(enterprise.address);
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = () => {
+    setEditOpen(false);
+    toast.success('企业信息更新成功');
+  };
+
+  const handleSync = () => {
+    setSyncing(true);
+    setTimeout(() => {
+      setSyncing(false);
+      toast.success('数据同步成功');
+    }, 1000);
+  };
 
   useEffect(() => {
     const days = Math.ceil(
@@ -57,11 +97,14 @@ export default function ProductionEnterpriseDetailClient({ params: paramsPromise
           <h1 className="text-xl font-semibold">企业详情 - {enterprise.name}</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Edit className="mr-1 h-3.5 w-3.5" />编辑</Button>
+          <Button variant="outline" size="sm" onClick={handleEditOpen}><Edit className="mr-1 h-3.5 w-3.5" />编辑</Button>
           <Link href="/production/ledger">
             <Button variant="outline" size="sm"><BookOpen className="mr-1 h-3.5 w-3.5" />台账</Button>
           </Link>
-          <Button variant="outline" size="sm"><RefreshCw className="mr-1 h-3.5 w-3.5" />同步</Button>
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? '同步中...' : '同步'}
+          </Button>
         </div>
       </div>
 
@@ -233,6 +276,34 @@ export default function ProductionEnterpriseDetailClient({ params: paramsPromise
           )}
         </CardContent>
       </Card>
+
+      {/* 编辑弹窗 */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>编辑企业信息</DialogTitle>
+            <DialogDescription>修改企业基本信息，提交后生效。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">企业名称</Label>
+              <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">联系电话</Label>
+              <Input id="edit-phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">详细地址</Label>
+              <Input id="edit-address" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>取消</Button>
+            <Button onClick={handleEditSubmit}>确认</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

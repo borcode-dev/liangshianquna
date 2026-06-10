@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,8 +70,17 @@ const detailFields: DetailField[] = [
 ];
 
 export default function InterfaceManagementPage() {
-  const [data, setData] = useState<InterfaceItem[]>(initialInterfaceData);
+  const [data, setData, hydrated] = useLocalStorage<InterfaceItem[]>("system-interfaces", initialInterfaceData);
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  // 搜索变化时重置页码
+  useEffect(() => { setCurrentPage(1); }, [search]);
+
+  if (!hydrated) {
+    return <div className="p-6">加载中...</div>;
+  }
 
   // CRUD modal states
   const [formOpen, setFormOpen] = useState(false);
@@ -204,7 +214,7 @@ export default function InterfaceManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((item) => {
+              {filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((item) => {
                 const sc = statusConfig[item.status] || statusConfig['正常'];
                 return (
                   <TableRow key={item.id}>
@@ -249,11 +259,20 @@ export default function InterfaceManagementPage() {
             </TableBody>
           </Table>
           <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
-            <span>共 {filtered.length} 个接口</span>
+            <span>共 {filtered.length} 条记录，第 {currentPage}/{Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))} 页</span>
             <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled>&lt;</Button>
-              <Button variant="outline" size="sm" className="bg-primary text-white">1</Button>
-              <Button variant="outline" size="sm" disabled>&gt;</Button>
+              <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>&lt;</Button>
+              {Array.from({ length: Math.min(5, Math.ceil(filtered.length / PAGE_SIZE)) }, (_, i) => {
+                const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+                let start = Math.max(1, currentPage - 2);
+                if (start + 4 > totalPages) start = Math.max(1, totalPages - 4);
+                const page = start + i;
+                if (page > totalPages) return null;
+                return (
+                  <Button key={page} variant="outline" size="sm" className={page === currentPage ? "bg-primary text-white" : ""} onClick={() => setCurrentPage(page)}>{page}</Button>
+                );
+              })}
+              <Button variant="outline" size="sm" disabled={currentPage >= Math.ceil(filtered.length / PAGE_SIZE)} onClick={() => setCurrentPage((p) => p + 1)}>&gt;</Button>
             </div>
           </div>
         </CardContent>

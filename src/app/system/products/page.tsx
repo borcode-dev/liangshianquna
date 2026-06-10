@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,12 +52,22 @@ const detailFields: DetailField[] = [
 ];
 
 export default function ProductManagementPage() {
-  const [data, setData] = useState<Registration[]>(
+  const [data, setData, hydrated] = useLocalStorage<Registration[]>(
+    "system-products",
     initialData.map((item, i) => ({ ...item, id: `reg-${i}` }))
   );
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  // 搜索/筛选变化时重置页码
+  useEffect(() => { setCurrentPage(1); }, [statusFilter, categoryFilter, searchTerm]);
+
+  if (!hydrated) {
+    return <div className="p-6">加载中...</div>;
+  }
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"add" | "edit">("add");
@@ -196,7 +207,7 @@ export default function ProductManagementPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredData.map((item) => (
+              {filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-mono text-xs">{item.regNo}</TableCell>
                   <TableCell className="font-medium">{item.name}</TableCell>
@@ -229,11 +240,20 @@ export default function ProductManagementPage() {
             </TableBody>
           </Table>
           <div className="flex items-center justify-between p-4 text-sm text-muted-foreground">
-            <span>共 {filteredData.length} 种登记证</span>
+            <span>共 {filteredData.length} 条记录，第 {currentPage}/{Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE))} 页</span>
             <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled>◀</Button>
-              <Button variant="outline" size="sm">1</Button>
-              <Button variant="outline" size="sm" disabled>▶</Button>
+              <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>&lt;</Button>
+              {Array.from({ length: Math.min(5, Math.ceil(filteredData.length / PAGE_SIZE)) }, (_, i) => {
+                const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+                let start = Math.max(1, currentPage - 2);
+                if (start + 4 > totalPages) start = Math.max(1, totalPages - 4);
+                const page = start + i;
+                if (page > totalPages) return null;
+                return (
+                  <Button key={page} variant="outline" size="sm" className={page === currentPage ? "bg-primary text-white" : ""} onClick={() => setCurrentPage(page)}>{page}</Button>
+                );
+              })}
+              <Button variant="outline" size="sm" disabled={currentPage >= Math.ceil(filteredData.length / PAGE_SIZE)} onClick={() => setCurrentPage((p) => p + 1)}>&gt;</Button>
             </div>
           </div>
         </CardContent>

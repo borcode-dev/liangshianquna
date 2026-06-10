@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,10 +16,31 @@ import {
   outboundRecords, alertRecords, monthlyProductionTrend, monthlyBusinessTrend,
 } from '@/lib/mock-data';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 export default function DashboardPage() {
   const [now, setNow] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => { setNow(Date.now()); }, []);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setNow(Date.now());
+      setRefreshKey((k) => k + 1);
+      setRefreshing(false);
+      toast.success('数据已刷新');
+    }, 800);
+  }, []);
+
+  const handleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen();
+    }
+  }, []);
 
   // 数据闭环：从真实数据源计算指标
   const metrics = useMemo(() => {
@@ -84,10 +105,10 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <RefreshCw className="mr-1 h-3.5 w-3.5" />刷新
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />刷新
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleFullscreen}>
             <Maximize2 className="mr-1 h-3.5 w-3.5" />全屏
           </Button>
         </div>

@@ -16,10 +16,142 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ArrowLeft, Save, Send } from 'lucide-react';
 import Link from 'next/link';
 import { productionProducts } from '@/lib/mock-data';
+import { toast } from 'sonner';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useRouter } from 'next/navigation';
+
+interface ProductionRecord {
+  id: string;
+  batchNo: string;
+  enterprise: string;
+  productionDate: string;
+  regNo: string;
+  productName: string;
+  form: string;
+  toxicity: string;
+  content: string;
+  quantity: string;
+  specification: string;
+  productBatchNo: string;
+  warehouse: string;
+  inspectionResult: string;
+  inspector: string;
+  createdAt: string;
+}
+
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+}
+
+function generateBatchNo(existingRecords: ProductionRecord[]): string {
+  const now = new Date();
+  const dateStr = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('');
+
+  const todayCount = existingRecords.filter((r) =>
+    r.batchNo.includes(dateStr)
+  ).length;
+
+  const seq = String(todayCount + 1).padStart(3, '0');
+  return `PC-${dateStr}-${seq}`;
+}
 
 export default function NewProductionBatchPage() {
+  const router = useRouter();
+  const [records, setRecords] = useLocalStorage<ProductionRecord[]>('production-ledger', []);
+
   const [selectedRegNo, setSelectedRegNo] = useState('PD20101001');
+  const [enterprise, setEnterprise] = useState('1');
+  const [productionDate, setProductionDate] = useState('2026-06-06');
+  const [quantity, setQuantity] = useState('');
+  const [specification, setSpecification] = useState('200L');
+  const [productBatchNo, setProductBatchNo] = useState('');
+  const [warehouse, setWarehouse] = useState('warehouse1');
+  const [inspectionResult, setInspectionResult] = useState('qualified');
+  const [inspector, setInspector] = useState('');
+
   const selectedProduct = productionProducts.find((p) => p.regNo === selectedRegNo);
+
+  function validate(): boolean {
+    if (!selectedProduct?.name) {
+      toast.error('请选择产品名称');
+      return false;
+    }
+    if (!quantity || Number(quantity) <= 0) {
+      toast.error('请输入生产数量');
+      return false;
+    }
+    if (!productionDate) {
+      toast.error('请选择生产日期');
+      return false;
+    }
+    return true;
+  }
+
+  function buildRecord(): ProductionRecord {
+    return {
+      id: generateId(),
+      batchNo: generateBatchNo(records),
+      enterprise:
+        enterprise === '1' ? '安徽农药化工集团' : '蚌埠农化股份公司',
+      productionDate,
+      regNo: selectedRegNo,
+      productName: selectedProduct?.name || '',
+      form: selectedProduct?.form || '',
+      toxicity: selectedProduct?.toxicity || '',
+      content: selectedProduct?.content || '',
+      quantity,
+      specification:
+        specification === '200L'
+          ? '200L/桶'
+          : specification === '20L'
+            ? '20L/桶'
+            : specification === '5L'
+              ? '5L/桶'
+              : '1L/瓶',
+      productBatchNo,
+      warehouse:
+        warehouse === 'warehouse1'
+          ? '1号仓库'
+          : warehouse === 'warehouse2'
+            ? '2号仓库'
+            : '3号仓库',
+      inspectionResult,
+      inspector,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  function resetForm() {
+    setSelectedRegNo('PD20101001');
+    setEnterprise('1');
+    setProductionDate('2026-06-06');
+    setQuantity('');
+    setSpecification('200L');
+    setProductBatchNo('');
+    setWarehouse('warehouse1');
+    setInspectionResult('qualified');
+    setInspector('');
+  }
+
+  function handleSave() {
+    if (!validate()) return;
+    const record = buildRecord();
+    setRecords((prev) => [...prev, record]);
+    toast.success('保存成功', { description: `批次编号：${record.batchNo}` });
+  }
+
+  function handleSubmit() {
+    if (!validate()) return;
+    const record = buildRecord();
+    setRecords((prev) => [...prev, record]);
+    toast.success('提交成功', { description: `批次编号：${record.batchNo}` });
+    resetForm();
+    router.push('/production/ledger');
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -31,8 +163,8 @@ export default function NewProductionBatchPage() {
           <h1 className="text-xl font-semibold">新增生产批次</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><Save className="mr-1 h-4 w-4" />保存</Button>
-          <Button><Send className="mr-1 h-4 w-4" />提交</Button>
+          <Button variant="outline" onClick={handleSave}><Save className="mr-1 h-4 w-4" />保存</Button>
+          <Button onClick={handleSubmit}><Send className="mr-1 h-4 w-4" />提交</Button>
         </div>
       </div>
 
@@ -45,12 +177,12 @@ export default function NewProductionBatchPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="space-y-2">
               <Label>批次编号</Label>
-              <Input value="PC-001*04" disabled />
-              <p className="text-xs text-muted-foreground">系统自动生成</p>
+              <Input value="系统自动生成" disabled />
+              <p className="text-xs text-muted-foreground">提交后自动生成</p>
             </div>
             <div className="space-y-2">
               <Label>生产企业</Label>
-              <Select defaultValue="1">
+              <Select value={enterprise} onValueChange={setEnterprise}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">安徽农药化工集团</SelectItem>
@@ -59,8 +191,8 @@ export default function NewProductionBatchPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>生产日期</Label>
-              <Input type="date" defaultValue="2026-06-06" />
+              <Label>生产日期 <span className="text-red-500">*</span></Label>
+              <Input type="date" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} />
             </div>
           </div>
         </CardContent>
@@ -87,7 +219,7 @@ export default function NewProductionBatchPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>农药名称</Label>
+              <Label>农药名称 <span className="text-red-500">*</span></Label>
               <Input value={selectedProduct?.name || ''} disabled />
             </div>
             <div className="space-y-2">
@@ -103,12 +235,12 @@ export default function NewProductionBatchPage() {
               <Input value={selectedProduct?.content || ''} disabled />
             </div>
             <div className="space-y-2">
-              <Label>生产数量（吨）</Label>
-              <Input type="number" placeholder="请输入生产数量" />
+              <Label>生产数量（吨） <span className="text-red-500">*</span></Label>
+              <Input type="number" placeholder="请输入生产数量" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>产品规格</Label>
-              <Select defaultValue="200L">
+              <Select value={specification} onValueChange={setSpecification}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="200L">200L/桶</SelectItem>
@@ -120,11 +252,11 @@ export default function NewProductionBatchPage() {
             </div>
             <div className="space-y-2">
               <Label>产品批号</Label>
-              <Input placeholder="LOT2026060601" />
+              <Input placeholder="LOT2026060601" value={productBatchNo} onChange={(e) => setProductBatchNo(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>仓库位置</Label>
-              <Select defaultValue="warehouse1">
+              <Select value={warehouse} onValueChange={setWarehouse}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="warehouse1">1号仓库</SelectItem>
@@ -157,14 +289,14 @@ export default function NewProductionBatchPage() {
               <tbody className="divide-y">
                 <tr>
                   <td className="py-2">草甘膦原药</td>
-                  <td className="font-mono">CG-2026*01</td>
+                  <td className="font-mono">CG-20260101</td>
                   <td>15吨</td>
                   <td>江苏化工</td>
                   <td><Button variant="ghost" size="sm">关联</Button></td>
                 </tr>
                 <tr>
                   <td className="py-2">表面活性剂</td>
-                  <td className="font-mono">CG-2026*02</td>
+                  <td className="font-mono">CG-20260102</td>
                   <td>3吨</td>
                   <td>浙江表面剂</td>
                   <td><Button variant="ghost" size="sm">关联</Button></td>
@@ -196,7 +328,7 @@ export default function NewProductionBatchPage() {
             </div>
             <div className="space-y-2">
               <Label>检验结论</Label>
-              <RadioGroup defaultValue="qualified" className="flex gap-4 pt-2">
+              <RadioGroup value={inspectionResult} onValueChange={setInspectionResult} className="flex gap-4 pt-2">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="qualified" id="q1" />
                   <Label htmlFor="q1">合格</Label>
@@ -209,7 +341,7 @@ export default function NewProductionBatchPage() {
             </div>
             <div className="space-y-2">
               <Label>检验员</Label>
-              <Input placeholder="请输入检验员姓名" />
+              <Input placeholder="请输入检验员姓名" value={inspector} onChange={(e) => setInspector(e.target.value)} />
             </div>
           </div>
         </CardContent>

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -113,8 +114,18 @@ function CreditBadge({ grade }: { grade: string }) {
 export default function EntityManagementPage() {
   const [tab, setTab] = useState("production");
   const [searchTerm, setSearchTerm] = useState("");
-  const [prodData, setProdData] = useState<ProdEntity[]>(initProd.map((e) => ({ ...e, entityType: "生产" })));
-  const [bizData, setBizData] = useState<BizEntity[]>(initBiz.map((e) => ({ ...e, entityType: "经营" })));
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  // 搜索/Tab变化时重置页码
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, tab]);
+  const [prodData, setProdData, prodHydrated] = useLocalStorage<ProdEntity[]>("system-entities-prod", initProd.map((e) => ({ ...e, entityType: "生产" })));
+  const [bizData, setBizData, bizHydrated] = useLocalStorage<BizEntity[]>("system-entities-biz", initBiz.map((e) => ({ ...e, entityType: "经营" })));
+
+  const hydrated = prodHydrated && bizHydrated;
+  if (!hydrated) {
+    return <div className="p-6">加载中...</div>;
+  }
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"add" | "edit">("add");
@@ -227,7 +238,7 @@ export default function EntityManagementPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData.map((e) => (
+                  {filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="font-medium">{e.name}</TableCell>
                       <TableCell className="font-mono text-xs">{e.creditCode}</TableCell>
@@ -246,6 +257,23 @@ export default function EntityManagementPage() {
                   ))}
                 </TableBody>
               </Table>
+              <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
+                <span>共 {filteredData.length} 条记录，第 {currentPage}/{Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE))} 页</span>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>&lt;</Button>
+                  {Array.from({ length: Math.min(5, Math.ceil(filteredData.length / PAGE_SIZE)) }, (_, i) => {
+                    const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+                    let start = Math.max(1, currentPage - 2);
+                    if (start + 4 > totalPages) start = Math.max(1, totalPages - 4);
+                    const page = start + i;
+                    if (page > totalPages) return null;
+                    return (
+                      <Button key={page} variant="outline" size="sm" className={page === currentPage ? "bg-primary text-white" : ""} onClick={() => setCurrentPage(page)}>{page}</Button>
+                    );
+                  })}
+                  <Button variant="outline" size="sm" disabled={currentPage >= Math.ceil(filteredData.length / PAGE_SIZE)} onClick={() => setCurrentPage((p) => p + 1)}>&gt;</Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -272,7 +300,7 @@ export default function EntityManagementPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredData.map((e) => (
+                  {filteredData.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="font-medium">{e.name}</TableCell>
                       <TableCell>{e.type}</TableCell>
@@ -291,6 +319,23 @@ export default function EntityManagementPage() {
                   ))}
                 </TableBody>
               </Table>
+              <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted-foreground">
+                <span>共 {filteredData.length} 条记录，第 {currentPage}/{Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE))} 页</span>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>&lt;</Button>
+                  {Array.from({ length: Math.min(5, Math.ceil(filteredData.length / PAGE_SIZE)) }, (_, i) => {
+                    const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
+                    let start = Math.max(1, currentPage - 2);
+                    if (start + 4 > totalPages) start = Math.max(1, totalPages - 4);
+                    const page = start + i;
+                    if (page > totalPages) return null;
+                    return (
+                      <Button key={page} variant="outline" size="sm" className={page === currentPage ? "bg-primary text-white" : ""} onClick={() => setCurrentPage(page)}>{page}</Button>
+                    );
+                  })}
+                  <Button variant="outline" size="sm" disabled={currentPage >= Math.ceil(filteredData.length / PAGE_SIZE)} onClick={() => setCurrentPage((p) => p + 1)}>&gt;</Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

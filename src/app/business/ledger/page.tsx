@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -245,13 +246,16 @@ export default function BusinessLedgerPage() {
   const [handledFilter, setHandledFilter] = useState('all');
 
   // 数据状态
-  const [inboundData, setInboundData] = useState<InboundRecord[]>(
+  const [inboundData, setInboundData, inboundHydrated] = useLocalStorage<InboundRecord[]>(
+    "business-ledger-inbound",
     (initialInboundRecords as unknown as InboundRecord[]).map((r) => ({ ...r, attachment: [] }))
   );
-  const [outboundData, setOutboundData] = useState<OutboundRecord[]>(
+  const [outboundData, setOutboundData, outboundHydrated] = useLocalStorage<OutboundRecord[]>(
+    "business-ledger-outbound",
     (initialOutboundRecords as unknown as OutboundRecord[]).map((r) => ({ ...r, attachment: [] }))
   );
-  const [inventoryList, setInventoryList] = useState<InventoryItem[]>(
+  const [inventoryList, setInventoryList, inventoryHydrated] = useLocalStorage<InventoryItem[]>(
+    "business-ledger-inventory",
     (initialInventoryData as unknown as InventoryItem[]).map((item, i) => ({
       ...item,
       id: `inv-${i + 1}`,
@@ -259,6 +263,11 @@ export default function BusinessLedgerPage() {
       attachment: [],
     }))
   );
+
+  const hydrated = inboundHydrated && outboundHydrated && inventoryHydrated;
+  if (!hydrated) {
+    return <div className="p-6">加载中...</div>;
+  }
 
   // ===== 入库 CRUD 状态 =====
   const [inboundFormOpen, setInboundFormOpen] = useState(false);

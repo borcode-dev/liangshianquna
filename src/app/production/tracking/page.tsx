@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Search, Download, Printer, FileText, ArrowRight } from 'lucide-react';
 import { productionLedger, productionFlowSales, productionEnterprises } from '@/lib/mock-data';
+import { toast } from 'sonner';
 
 export default function ProductionTrackingPage() {
   const [selectedBatch, setSelectedBatch] = useState(productionLedger[0].batchNo);
@@ -48,14 +49,66 @@ export default function ProductionTrackingPage() {
     return result;
   }, [enterpriseFilter, searchText]);
 
+  // 导出CSV
+  const handleExport = () => {
+    const headers = ['购买方', '购买量(吨)', '购买日期', '流向地区', '状态'];
+    const rows = batchSales.map((s) => [s.buyer, s.quantity, s.date, s.region, s.status]);
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `生产流向追踪_${selectedBatch}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('导出成功', { description: `已导出批次 ${selectedBatch} 的销售明细` });
+  };
+
+  // 打印
+  const handlePrint = () => {
+    window.print();
+    toast.success('正在调用打印');
+  };
+
+  // 追溯报告
+  const handleTraceReport = () => {
+    const lines = [
+      `农药生产流向追溯报告`,
+      ``,
+      `批次编号：${selected.batchNo}`,
+      `产品名称：${selected.productName}`,
+      `生产企业：${selected.enterprise}`,
+      `生产日期：${selected.date}`,
+      `产量：${selected.output}吨`,
+      `已售：${selected.sold}吨`,
+      `当前库存：${selected.stock}吨`,
+      `出库率：${outRate}%`,
+      `可追溯率：100%`,
+      ``,
+      `销售明细（共${batchSales.length}笔）：`,
+      ...batchSales.map((s, i) => `  ${i + 1}. 购买方：${s.buyer}，购买量：${s.quantity}吨，日期：${s.date}，流向：${s.region}，状态：${s.status}`),
+      ``,
+      `报告生成时间：${new Date().toLocaleString('zh-CN')}`,
+    ];
+    const text = lines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `追溯报告_${selectedBatch}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('追溯报告已生成', { description: `批次 ${selectedBatch} 的追溯报告已下载` });
+  };
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">生产流向追踪</h1>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Download className="mr-1 h-3.5 w-3.5" />导出</Button>
-          <Button variant="outline" size="sm"><Printer className="mr-1 h-3.5 w-3.5" />打印</Button>
-          <Button variant="outline" size="sm"><FileText className="mr-1 h-3.5 w-3.5" />追溯报告</Button>
+          <Button variant="outline" size="sm" onClick={handleExport}><Download className="mr-1 h-3.5 w-3.5" />导出</Button>
+          <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="mr-1 h-3.5 w-3.5" />打印</Button>
+          <Button variant="outline" size="sm" onClick={handleTraceReport}><FileText className="mr-1 h-3.5 w-3.5" />追溯报告</Button>
         </div>
       </div>
 

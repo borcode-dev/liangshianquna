@@ -15,8 +15,124 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ArrowLeft, Save, Send, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+
+interface OutboundRecord {
+  id: number;
+  orderNo: string;
+  enterprise: string;
+  date: string;
+  type: string;
+  buyerType: string;
+  buyerName: string;
+  buyerIdCard: string;
+  buyerPhone: string;
+  buyerRegion: string;
+  buyerAddress: string;
+  productName: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  purpose: string;
+  createdAt: string;
+}
+
+const initialForm = {
+  enterprise: '',
+  date: '',
+  type: 'sale',
+  buyerType: 'farmer',
+  buyerName: '',
+  buyerIdCard: '',
+  buyerPhone: '',
+  buyerCity: '',
+  buyerCounty: '',
+  buyerAddress: '',
+  productName: '',
+  quantity: '',
+  unit: 'L',
+  unitPrice: '',
+  purpose: 'agri',
+};
+
+function generateOutboundOrderNo(records: OutboundRecord[]): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${y}${m}${d}`;
+  const prefix = `CK-${dateStr}-`;
+  const todayRecords = records.filter((r) => r.orderNo.startsWith(prefix));
+  const seq = todayRecords.length + 1;
+  return `${prefix}${String(seq).padStart(2, '0')}`;
+}
 
 export default function OutboundPage() {
+  const router = useRouter();
+  const [records, setRecords] = useLocalStorage<OutboundRecord[]>('outbound-records', []);
+  const [form, setForm] = useState(initialForm);
+
+  const updateForm = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const validate = (): boolean => {
+    if (!form.productName) {
+      toast.error('请填写产品名称');
+      return false;
+    }
+    if (!form.quantity) {
+      toast.error('请填写数量');
+      return false;
+    }
+    if (!form.buyerName) {
+      toast.error('请填写购买方名称');
+      return false;
+    }
+    return true;
+  };
+
+  const buildRecord = (): OutboundRecord => {
+    const orderNo = generateOutboundOrderNo(records);
+    return {
+      id: Date.now(),
+      orderNo,
+      enterprise: form.enterprise,
+      date: form.date,
+      type: form.type,
+      buyerType: form.buyerType,
+      buyerName: form.buyerName,
+      buyerIdCard: form.buyerIdCard,
+      buyerPhone: form.buyerPhone,
+      buyerRegion: `${form.buyerCity}${form.buyerCounty}`,
+      buyerAddress: form.buyerAddress,
+      productName: form.productName,
+      quantity: form.quantity,
+      unit: form.unit,
+      unitPrice: form.unitPrice,
+      purpose: form.purpose,
+      createdAt: new Date().toISOString(),
+    };
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    const record = buildRecord();
+    setRecords((prev) => [...prev, record]);
+    toast.success('出库记录已保存', { description: `单号：${record.orderNo}` });
+  };
+
+  const handleSubmit = () => {
+    if (!validate()) return;
+    const record = buildRecord();
+    setRecords((prev) => [...prev, record]);
+    toast.success('出库记录已提交', { description: `单号：${record.orderNo}` });
+    setForm(initialForm);
+    router.push('/business/ledger');
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -27,8 +143,8 @@ export default function OutboundPage() {
           <h1 className="text-xl font-semibold">农药出库登记</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><Save className="mr-1 h-4 w-4" />保存</Button>
-          <Button><Send className="mr-1 h-4 w-4" />提交</Button>
+          <Button variant="outline" onClick={handleSave}><Save className="mr-1 h-4 w-4" />保存</Button>
+          <Button onClick={handleSubmit}><Send className="mr-1 h-4 w-4" />提交</Button>
         </div>
       </div>
 
@@ -39,25 +155,25 @@ export default function OutboundPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="space-y-2">
               <Label>出库单号</Label>
-              <Input value="CK-2026060601" disabled />
+              <Input value="保存后自动生成" disabled />
             </div>
             <div className="space-y-2">
               <Label>出库企业</Label>
-              <Select defaultValue="1">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.enterprise} onValueChange={(v) => updateForm('enterprise', v)}>
+                <SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">怀远县农技服务站</SelectItem>
-                  <SelectItem value="2">阜阳农药批发中心</SelectItem>
+                  <SelectItem value="怀远县农技服务站">怀远县农技服务站</SelectItem>
+                  <SelectItem value="阜阳农药批发中心">阜阳农药批发中心</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>出库日期</Label>
-              <Input type="date" defaultValue="2026-06-06" />
+              <Input type="date" value={form.date} onChange={(e) => updateForm('date', e.target.value)} />
             </div>
             <div className="space-y-2 lg:col-span-3">
               <Label>出库类型</Label>
-              <RadioGroup defaultValue="sale" className="flex gap-4 pt-2">
+              <RadioGroup value={form.type} onValueChange={(v) => updateForm('type', v)} className="flex gap-4 pt-2">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="sale" id="s1" /><Label htmlFor="s1">销售出库</Label>
                 </div>
@@ -83,7 +199,7 @@ export default function OutboundPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="space-y-2">
               <Label>购买方类型</Label>
-              <RadioGroup defaultValue="farmer" className="flex gap-4 pt-2">
+              <RadioGroup value={form.buyerType} onValueChange={(v) => updateForm('buyerType', v)} className="flex gap-4 pt-2">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="farmer" id="b1" /><Label htmlFor="b1">农户</Label>
                 </div>
@@ -99,39 +215,39 @@ export default function OutboundPage() {
               </RadioGroup>
             </div>
             <div className="space-y-2">
-              <Label>购买方名称</Label>
-              <Input placeholder="农户/企业名称" />
+              <Label>购买方名称 <span className="text-red-500">*</span></Label>
+              <Input placeholder="农户/企业名称" value={form.buyerName} onChange={(e) => updateForm('buyerName', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>身份证号</Label>
-              <Input placeholder="农户必填" />
+              <Input placeholder="农户必填" value={form.buyerIdCard} onChange={(e) => updateForm('buyerIdCard', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>联系电话</Label>
-              <Input placeholder="手机号" />
+              <Input placeholder="手机号" value={form.buyerPhone} onChange={(e) => updateForm('buyerPhone', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>所在地区</Label>
               <div className="flex gap-2">
-                <Select defaultValue="bengbu">
-                  <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
+                <Select value={form.buyerCity} onValueChange={(v) => updateForm('buyerCity', v)}>
+                  <SelectTrigger className="w-[100px]"><SelectValue placeholder="市" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="bengbu">蚌埠市</SelectItem>
-                    <SelectItem value="fuyang">阜阳市</SelectItem>
+                    <SelectItem value="蚌埠市">蚌埠市</SelectItem>
+                    <SelectItem value="阜阳市">阜阳市</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select defaultValue="huaiyuan">
-                  <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
+                <Select value={form.buyerCounty} onValueChange={(v) => updateForm('buyerCounty', v)}>
+                  <SelectTrigger className="w-[100px]"><SelectValue placeholder="县" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="huaiyuan">怀远县</SelectItem>
-                    <SelectItem value="guzhen">固镇县</SelectItem>
+                    <SelectItem value="怀远县">怀远县</SelectItem>
+                    <SelectItem value="固镇县">固镇县</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-2">
               <Label>详细地址</Label>
-              <Input placeholder="详细地址" />
+              <Input placeholder="详细地址" value={form.buyerAddress} onChange={(e) => updateForm('buyerAddress', e.target.value)} />
             </div>
           </div>
         </CardContent>
@@ -145,10 +261,10 @@ export default function OutboundPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="pb-2 text-left font-medium">农药名称</th>
+                  <th className="pb-2 text-left font-medium">农药名称 <span className="text-red-500">*</span></th>
                   <th className="pb-2 text-left font-medium">登记证号</th>
                   <th className="pb-2 text-left font-medium">当前库存</th>
-                  <th className="pb-2 text-left font-medium">数量</th>
+                  <th className="pb-2 text-left font-medium">数量 <span className="text-red-500">*</span></th>
                   <th className="pb-2 text-left font-medium">单价</th>
                   <th className="pb-2 text-left font-medium">金额</th>
                   <th className="pb-2 text-left font-medium">购买用途</th>
@@ -156,14 +272,20 @@ export default function OutboundPage() {
               </thead>
               <tbody>
                 <tr className="border-b">
-                  <td className="py-2">草甘膦水剂</td>
+                  <td className="py-2">
+                    <Input className="w-[120px]" value={form.productName} onChange={(e) => updateForm('productName', e.target.value)} placeholder="农药名称" />
+                  </td>
                   <td className="font-mono">PD20101001</td>
                   <td>8吨</td>
-                  <td><Input className="w-[80px]" type="number" defaultValue="50" />L</td>
-                  <td>62元</td>
-                  <td className="font-medium">3,100元</td>
+                  <td><Input className="w-[80px]" type="number" value={form.quantity} onChange={(e) => updateForm('quantity', e.target.value)} />{form.unit}</td>
+                  <td><Input className="w-[100px]" type="number" value={form.unitPrice} onChange={(e) => updateForm('unitPrice', e.target.value)} />元</td>
+                  <td className="font-medium">
+                    {form.quantity && form.unitPrice
+                      ? `${(Number(form.quantity) * Number(form.unitPrice)).toLocaleString()}元`
+                      : '-'}
+                  </td>
                   <td>
-                    <Select defaultValue="agri">
+                    <Select value={form.purpose} onValueChange={(v) => updateForm('purpose', v)}>
                       <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="agri">农业生产</SelectItem>
@@ -176,9 +298,9 @@ export default function OutboundPage() {
               <tfoot>
                 <tr className="font-medium">
                   <td colSpan={3}>合计</td>
-                  <td>50L</td>
+                  <td>{form.quantity ? `${form.quantity}${form.unit}` : '-'}</td>
                   <td></td>
-                  <td>3,100元</td>
+                  <td>{form.quantity && form.unitPrice ? `${(Number(form.quantity) * Number(form.unitPrice)).toLocaleString()}元` : '-'}</td>
                   <td></td>
                 </tr>
               </tfoot>

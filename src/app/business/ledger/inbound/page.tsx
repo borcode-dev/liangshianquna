@@ -15,11 +15,130 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ArrowLeft, Save, Send } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { useLocalStorage } from '@/hooks/use-local-storage';
 import { productionProducts } from '@/lib/mock-data';
 
+interface InboundRecord {
+  id: number;
+  orderNo: string;
+  enterprise: string;
+  date: string;
+  type: string;
+  supplier: string;
+  supplierContact: string;
+  supplierPhone: string;
+  invoiceNo: string;
+  invoiceDate: string;
+  productName: string;
+  regNo: string;
+  batchNo: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  warehouse: string;
+  location: string;
+  createdAt: string;
+}
+
+const initialForm = {
+  enterprise: '',
+  date: '',
+  type: 'purchase',
+  supplier: '',
+  supplierContact: '',
+  supplierPhone: '',
+  invoiceNo: '',
+  invoiceDate: '',
+  selectedRegNo: 'PD20101001',
+  batchNo: '',
+  quantity: '',
+  unit: '吨',
+  unitPrice: '',
+  warehouse: '',
+  location: '',
+};
+
+function generateInboundOrderNo(records: InboundRecord[]): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${y}${m}${d}`;
+  const prefix = `RK-${dateStr}-`;
+  const todayRecords = records.filter((r) => r.orderNo.startsWith(prefix));
+  const seq = todayRecords.length + 1;
+  return `${prefix}${String(seq).padStart(2, '0')}`;
+}
+
 export default function InboundPage() {
-  const [selectedRegNo, setSelectedRegNo] = useState('PD20101001');
-  const selectedProduct = productionProducts.find((p) => p.regNo === selectedRegNo);
+  const router = useRouter();
+  const [records, setRecords] = useLocalStorage<InboundRecord[]>('inbound-records', []);
+  const [form, setForm] = useState(initialForm);
+
+  const selectedProduct = productionProducts.find((p) => p.regNo === form.selectedRegNo);
+
+  const updateForm = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const validate = (): boolean => {
+    if (!selectedProduct) {
+      toast.error('请选择产品名称');
+      return false;
+    }
+    if (!form.quantity) {
+      toast.error('请填写数量');
+      return false;
+    }
+    if (!form.supplier) {
+      toast.error('请选择供货单位');
+      return false;
+    }
+    return true;
+  };
+
+  const buildRecord = (): InboundRecord => {
+    const orderNo = generateInboundOrderNo(records);
+    return {
+      id: Date.now(),
+      orderNo,
+      enterprise: form.enterprise,
+      date: form.date,
+      type: form.type,
+      supplier: form.supplier,
+      supplierContact: form.supplierContact,
+      supplierPhone: form.supplierPhone,
+      invoiceNo: form.invoiceNo,
+      invoiceDate: form.invoiceDate,
+      productName: selectedProduct?.name ?? '',
+      regNo: form.selectedRegNo,
+      batchNo: form.batchNo,
+      quantity: form.quantity,
+      unit: form.unit,
+      unitPrice: form.unitPrice,
+      warehouse: form.warehouse,
+      location: form.location,
+      createdAt: new Date().toISOString(),
+    };
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    const record = buildRecord();
+    setRecords((prev) => [...prev, record]);
+    toast.success('入库记录已保存', { description: `单号：${record.orderNo}` });
+  };
+
+  const handleSubmit = () => {
+    if (!validate()) return;
+    const record = buildRecord();
+    setRecords((prev) => [...prev, record]);
+    toast.success('入库记录已提交', { description: `单号：${record.orderNo}` });
+    setForm(initialForm);
+    router.push('/business/ledger');
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -31,8 +150,8 @@ export default function InboundPage() {
           <h1 className="text-xl font-semibold">农药入库登记</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><Save className="mr-1 h-4 w-4" />保存</Button>
-          <Button><Send className="mr-1 h-4 w-4" />提交</Button>
+          <Button variant="outline" onClick={handleSave}><Save className="mr-1 h-4 w-4" />保存</Button>
+          <Button onClick={handleSubmit}><Send className="mr-1 h-4 w-4" />提交</Button>
         </div>
       </div>
 
@@ -43,25 +162,25 @@ export default function InboundPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="space-y-2">
               <Label>入库单号</Label>
-              <Input value="RK-2026060601" disabled />
+              <Input value="保存后自动生成" disabled />
             </div>
             <div className="space-y-2">
               <Label>入库企业</Label>
-              <Select defaultValue="1">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.enterprise} onValueChange={(v) => updateForm('enterprise', v)}>
+                <SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">怀远县农技服务站</SelectItem>
-                  <SelectItem value="2">阜阳农药批发中心</SelectItem>
+                  <SelectItem value="怀远县农技服务站">怀远县农技服务站</SelectItem>
+                  <SelectItem value="阜阳农药批发中心">阜阳农药批发中心</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>入库日期</Label>
-              <Input type="date" defaultValue="2026-06-06" />
+              <Input type="date" value={form.date} onChange={(e) => updateForm('date', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>入库类型</Label>
-              <RadioGroup defaultValue="purchase" className="flex gap-4 pt-2">
+              <RadioGroup value={form.type} onValueChange={(v) => updateForm('type', v)} className="flex gap-4 pt-2">
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="purchase" id="r1" /><Label htmlFor="r1">采购入库</Label>
                 </div>
@@ -83,30 +202,30 @@ export default function InboundPage() {
         <CardContent>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="space-y-2">
-              <Label>供货单位</Label>
-              <Select defaultValue="1">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label>供货单位 <span className="text-red-500">*</span></Label>
+              <Select value={form.supplier} onValueChange={(v) => updateForm('supplier', v)}>
+                <SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">安徽农药化工集团</SelectItem>
-                  <SelectItem value="2">蚌埠农化股份公司</SelectItem>
+                  <SelectItem value="安徽农药化工集团">安徽农药化工集团</SelectItem>
+                  <SelectItem value="蚌埠农化股份公司">蚌埠农化股份公司</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>联系人</Label>
-              <Input placeholder="联系人" />
+              <Input placeholder="联系人" value={form.supplierContact} onChange={(e) => updateForm('supplierContact', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>联系电话</Label>
-              <Input placeholder="联系电话" />
+              <Input placeholder="联系电话" value={form.supplierPhone} onChange={(e) => updateForm('supplierPhone', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>发票号</Label>
-              <Input placeholder="发票号" />
+              <Input placeholder="发票号" value={form.invoiceNo} onChange={(e) => updateForm('invoiceNo', e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>发票日期</Label>
-              <Input type="date" defaultValue="2026-06-06" />
+              <Input type="date" value={form.invoiceDate} onChange={(e) => updateForm('invoiceDate', e.target.value)} />
             </div>
           </div>
         </CardContent>
@@ -120,11 +239,11 @@ export default function InboundPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="pb-2 text-left font-medium">农药名称</th>
+                  <th className="pb-2 text-left font-medium">农药名称 <span className="text-red-500">*</span></th>
                   <th className="pb-2 text-left font-medium">登记证号</th>
                   <th className="pb-2 text-left font-medium">批次号</th>
                   <th className="pb-2 text-left font-medium">生产日期</th>
-                  <th className="pb-2 text-left font-medium">数量</th>
+                  <th className="pb-2 text-left font-medium">数量 <span className="text-red-500">*</span></th>
                   <th className="pb-2 text-left font-medium">单价</th>
                   <th className="pb-2 text-left font-medium">金额</th>
                 </tr>
@@ -132,7 +251,7 @@ export default function InboundPage() {
               <tbody className="divide-y">
                 <tr>
                   <td className="py-2">
-                    <Select value={selectedRegNo} onValueChange={setSelectedRegNo}>
+                    <Select value={form.selectedRegNo} onValueChange={(v) => updateForm('selectedRegNo', v)}>
                       <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {productionProducts.map((p) => (
@@ -141,20 +260,24 @@ export default function InboundPage() {
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="font-mono">{selectedRegNo}</td>
-                  <td><Input className="w-[120px]" defaultValue="PC-001*01" /></td>
+                  <td className="font-mono">{form.selectedRegNo}</td>
+                  <td><Input className="w-[120px]" value={form.batchNo} onChange={(e) => updateForm('batchNo', e.target.value)} placeholder="批次号" /></td>
                   <td>06-01</td>
-                  <td><Input className="w-[80px]" type="number" defaultValue="5" />吨</td>
-                  <td><Input className="w-[100px]" type="number" defaultValue="31000" /></td>
-                  <td className="font-medium">15.5万</td>
+                  <td><Input className="w-[80px]" type="number" value={form.quantity} onChange={(e) => updateForm('quantity', e.target.value)} />{form.unit}</td>
+                  <td><Input className="w-[100px]" type="number" value={form.unitPrice} onChange={(e) => updateForm('unitPrice', e.target.value)} /></td>
+                  <td className="font-medium">
+                    {form.quantity && form.unitPrice
+                      ? `${(Number(form.quantity) * Number(form.unitPrice) / 10000).toFixed(1)}万`
+                      : '-'}
+                  </td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr className="border-t font-medium">
                   <td colSpan={4}>合计</td>
-                  <td>5吨</td>
+                  <td>{form.quantity ? `${form.quantity}${form.unit}` : '-'}</td>
                   <td></td>
-                  <td>15.5万元</td>
+                  <td>{form.quantity && form.unitPrice ? `${(Number(form.quantity) * Number(form.unitPrice) / 10000).toFixed(1)}万元` : '-'}</td>
                 </tr>
               </tfoot>
             </table>
@@ -187,21 +310,21 @@ export default function InboundPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <Label>存放仓库</Label>
-              <Select defaultValue="w1">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.warehouse} onValueChange={(v) => updateForm('warehouse', v)}>
+                <SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="w1">1号仓库</SelectItem>
-                  <SelectItem value="w2">2号仓库</SelectItem>
+                  <SelectItem value="1号仓库">1号仓库</SelectItem>
+                  <SelectItem value="2号仓库">2号仓库</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>存放位置</Label>
-              <Select defaultValue="a3">
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.location} onValueChange={(v) => updateForm('location', v)}>
+                <SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="a3">农药货架A区-03</SelectItem>
-                  <SelectItem value="b1">农药货架B区-01</SelectItem>
+                  <SelectItem value="农药货架A区-03">农药货架A区-03</SelectItem>
+                  <SelectItem value="农药货架B区-01">农药货架B区-01</SelectItem>
                 </SelectContent>
               </Select>
             </div>
